@@ -38,7 +38,7 @@ export function Loading({
         duration: 0.8,
         repeat: Infinity,
         delay: i * 0.15,
-        ease: 'easeInOut',
+        ease: 'easeInOut' as const,
       },
     }),
   };
@@ -207,14 +207,18 @@ export function LoadingRing({
 // Skeleton loading placeholder
 export function Skeleton({
   className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <motion.div
       className={cn(
         'rounded-xl bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]',
         className
       )}
+      style={style}
       animate={{
         backgroundPosition: ['200% 0', '-200% 0'],
       }}
@@ -223,7 +227,6 @@ export function Skeleton({
         repeat: Infinity,
         ease: 'linear',
       }}
-      {...props}
     />
   );
 }
