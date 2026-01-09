@@ -65,26 +65,45 @@ export function SwipeCard({ name, onSwipe, onTap }: SwipeCardProps) {
         </motion.div>
 
         {/* Card content */}
-        <div className="p-8 min-h-[400px] flex flex-col items-center justify-center">
+        <div className="p-8 min-h-[400px] flex flex-col items-center justify-center relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+            <div className="absolute top-4 left-4 text-6xl">👶</div>
+            <div className="absolute top-8 right-8 text-4xl">✨</div>
+            <div className="absolute bottom-12 left-8 text-5xl">💕</div>
+            <div className="absolute bottom-6 right-6 text-4xl">🌟</div>
+          </div>
+
+          {/* Gradient accent at top */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[var(--primary)] via-[var(--secondary)] to-[var(--primary)]" />
+
           {/* Country flag */}
-          <span className="text-3xl mb-4">
-            {name.country === 'BR' ? '🇧🇷' : '🇺🇸'}
-          </span>
+          <div className="relative mb-6">
+            <span className="text-5xl drop-shadow-lg animate-float">
+              {name.country === 'BR' ? '🇧🇷' : '🇺🇸'}
+            </span>
+          </div>
 
           {/* Name */}
-          <h2 className="text-5xl font-bold text-[var(--foreground)] mb-4 text-center">
+          <h2 className="text-6xl font-bold text-gradient mb-6 text-center tracking-tight">
             {name.name}
           </h2>
 
           {/* Gender badge */}
-          <span className="px-3 py-1 rounded-full bg-[var(--background)] text-sm font-medium text-[var(--foreground-muted)]">
+          <span className={`px-5 py-2 rounded-full text-base font-semibold shadow-md ${
+            name.gender === 'M'
+              ? 'bg-blue-100 text-blue-700 border-2 border-blue-200'
+              : name.gender === 'F'
+              ? 'bg-pink-100 text-pink-700 border-2 border-pink-200'
+              : 'bg-purple-100 text-purple-700 border-2 border-purple-200'
+          }`}>
             {name.gender === 'M' ? '👦 Boy' : name.gender === 'F' ? '👧 Girl' : '🌟 Unisex'}
           </span>
 
           {/* Tap for more info */}
-          <div className="mt-8 flex items-center gap-2 text-[var(--foreground-muted)]">
+          <div className="mt-10 flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--background)] border border-[var(--primary-light)] text-[var(--primary-dark)] hover:bg-[var(--primary-light)] hover:text-white transition-all">
             <Info className="h-4 w-4" />
-            <span className="text-sm">Tap for details</span>
+            <span className="text-sm font-medium">Tap for details</span>
           </div>
         </div>
       </div>

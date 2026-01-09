@@ -19,6 +19,25 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if profile exists (required for FK constraints)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      // Profile doesn't exist - create it manually
+      const { error: createProfileError } = await supabase
+        .from('profiles')
+        .insert({ id: user.id, display_name: user.email?.split('@')[0] || 'User' });
+
+      if (createProfileError) {
+        console.error('Create profile error:', createProfileError);
+        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
+      }
+    }
+
     // Record the swipe
     const { error: swipeError } = await supabase
       .from('swipes')

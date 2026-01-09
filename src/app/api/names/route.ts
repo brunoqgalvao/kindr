@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const country = searchParams.get('country'); // BR, US, or BOTH
     const gender = searchParams.get('gender'); // M, F, or BOTH
     const excludedLetters = searchParams.get('excluded')?.split(',').filter(Boolean) || [];
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
 
     // Get names the user has already swiped on
     const { data: swipedNames } = await supabase
@@ -41,17 +42,17 @@ export async function GET(request: Request) {
       query = query.not('id', 'in', `(${swipedIds.join(',')})`);
     }
 
-    // Get names with random ordering
+    // Get more names than needed to account for letter filtering
     const { data: names, error } = await query
       .order('popularity_rank', { ascending: true, nullsFirst: false })
-      .limit(100);
+      .limit(limit * 3); // Fetch extra to account for letter filtering
 
     if (error) {
       console.error('Error fetching names:', error);
       return NextResponse.json({ error: 'Failed to fetch names' }, { status: 500 });
     }
 
-    // Filter by excluded letters (client side for simplicity)
+    // Filter by excluded letters
     let filteredNames = names || [];
     if (excludedLetters.length > 0) {
       const excludedLower = excludedLetters.map(l => l.toLowerCase());
@@ -61,10 +62,15 @@ export async function GET(request: Request) {
       });
     }
 
-    // Shuffle the names for randomness
-    const shuffled = filteredNames.sort(() => Math.random() - 0.5);
+    // Shuffle the names for randomness and limit to requested amount
+    const shuffled = filteredNames
+      .sort(() => Math.random() - 0.5)
+      .slice(0, limit);
 
-    return NextResponse.json({ names: shuffled });
+    return NextResponse.json({
+      names: shuffled,
+      hasMore: filteredNames.length > limit,
+    });
   } catch (error) {
     console.error('Names API error:', error);
     return NextResponse.json(

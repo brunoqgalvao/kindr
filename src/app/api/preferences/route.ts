@@ -51,12 +51,35 @@ export async function POST(request: Request) {
 
     const { country, gender, excludedLetters } = await request.json();
 
+    // Check if profile exists (required for FK constraints)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      // Profile doesn't exist - create it manually
+      const { error: createProfileError } = await supabase
+        .from('profiles')
+        .insert({ id: user.id, display_name: user.email?.split('@')[0] || 'User' });
+
+      if (createProfileError) {
+        console.error('Create profile error:', createProfileError);
+        return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
+      }
+    }
+
     // Get or create couple
-    let { data: couple } = await supabase
+    let { data: couple, error: coupleQueryError } = await supabase
       .from('couples')
       .select('id')
       .or(`user_1_id.eq.${user.id},user_2_id.eq.${user.id}`)
       .single();
+
+    if (coupleQueryError && coupleQueryError.code !== 'PGRST116') {
+      console.error('Couple query error:', coupleQueryError);
+    }
 
     // If no couple exists, create one
     if (!couple) {

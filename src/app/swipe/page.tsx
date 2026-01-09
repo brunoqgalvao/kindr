@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
-import { Settings, Heart, ThumbsDown, RefreshCw } from 'lucide-react';
+import { Settings, Heart, ThumbsDown, RefreshCw, UserPlus } from 'lucide-react';
 import { SwipeCard } from '@/components/swipe/SwipeCard';
 import { NameDetails } from '@/components/swipe/NameDetails';
 import { MatchCelebration } from '@/components/swipe/MatchCelebration';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { useRealtimeMatches } from '@/hooks/useRealtimeMatches';
 import type { Name } from '@/types/database';
 
 export default function SwipePage() {
@@ -17,12 +18,67 @@ export default function SwipePage() {
   const [showDetails, setShowDetails] = useState(false);
   const [matchedName, setMatchedName] = useState<string | null>(null);
   const [matchCount, setMatchCount] = useState(0);
+  const [coupleId, setCoupleId] = useState<string | null>(null);
+  const [hasPartner, setHasPartner] = useState<boolean | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreNames, setHasMoreNames] = useState(true);
   const router = useRouter();
 
   const currentName = names[currentIndex];
 
-  const fetchNames = useCallback(async () => {
-    setLoading(true);
+  // Handle realtime match notifications from partner
+  const handleRealtimeMatch = useCallback(async (match: { name_id: string }) => {
+    // Only show if we didn't trigger this match ourselves (partner triggered it)
+    // We check by seeing if the current name matches - if so, we already showed it
+    if (currentName && match.name_id === currentName.id) {
+      return; // Already handled by our own swipe
+    }
+
+    // Fetch the name details for the matched name
+    try {
+      const res = await fetch('/api/matches');
+      if (res.ok) {
+        const data = await res.json();
+        const latestMatch = data.matches?.find((m: { name_id: string }) => m.name_id === match.name_id);
+        if (latestMatch?.names?.name) {
+          setMatchedName(latestMatch.names.name);
+          setMatchCount((prev) => prev + 1);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching matched name:', error);
+      setMatchCount((prev) => prev + 1);
+    }
+  }, [currentName]);
+
+  // Subscribe to realtime match updates
+  useRealtimeMatches({
+    coupleId,
+    onNewMatch: handleRealtimeMatch,
+    enabled: !!coupleId,
+  });
+
+  // Fetch couple info for realtime subscription and partner status
+  const fetchCoupleInfo = useCallback(async () => {
+    try {
+      const res = await fetch('/api/couples');
+      const data = await res.json();
+      if (data.couple?.id) {
+        setCoupleId(data.couple.id);
+        setHasPartner(!!data.couple.user_2_id);
+      } else {
+        setHasPartner(false);
+      }
+    } catch (error) {
+      console.error('Error fetching couple info:', error);
+      setHasPartner(false);
+    }
+  }, []);
+
+  const fetchNames = useCallback(async (append = false) => {
+    if (!append) setLoading(true);
+    else setLoadingMore(true);
+
     try {
       // Get preferences first
       const prefsRes = await fetch('/api/preferences');
@@ -36,15 +92,28 @@ export default function SwipePage() {
       if (prefs?.excluded_letters?.length) {
         params.set('excluded', prefs.excluded_letters.join(','));
       }
+      params.set('limit', '50');
 
       const res = await fetch(`/api/names?${params}`);
       const data = await res.json();
-      setNames(data.names || []);
-      setCurrentIndex(0);
+      const newNames = data.names || [];
+
+      if (newNames.length === 0) {
+        setHasMoreNames(false);
+      }
+
+      if (append) {
+        setNames(prev => [...prev, ...newNames]);
+      } else {
+        setNames(newNames);
+        setCurrentIndex(0);
+        setHasMoreNames(newNames.length > 0);
+      }
     } catch (error) {
       console.error('Error fetching names:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
@@ -61,7 +130,16 @@ export default function SwipePage() {
   useEffect(() => {
     fetchNames();
     fetchMatchCount();
-  }, [fetchNames]);
+    fetchCoupleInfo();
+  }, [fetchNames, fetchCoupleInfo]);
+
+  // Load more names when approaching the end of the list
+  useEffect(() => {
+    const remainingNames = names.length - currentIndex;
+    if (remainingNames <= 10 && !loadingMore && hasMoreNames) {
+      fetchNames(true);
+    }
+  }, [currentIndex, names.length, loadingMore, hasMoreNames, fetchNames]);
 
   const handleSwipe = async (direction: 'left' | 'right') => {
     if (!currentName) return;
@@ -109,7 +187,7 @@ export default function SwipePage() {
     );
   }
 
-  const isOutOfNames = currentIndex >= names.length;
+  const isOutOfNames = currentIndex >= names.length && !hasMoreNames;
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--background)]">
@@ -122,17 +200,30 @@ export default function SwipePage() {
           <Settings className="h-6 w-6 text-[var(--foreground)]" />
         </button>
         <h1 className="text-xl font-bold text-[var(--foreground)]">Kindr</h1>
-        <button
-          onClick={() => router.push('/matches')}
-          className="relative p-2 rounded-full hover:bg-white/50"
-        >
-          <Heart className="h-6 w-6 text-[var(--primary)] fill-[var(--primary)]" />
-          {matchCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-[var(--primary)] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-              {matchCount}
-            </span>
+        <div className="flex items-center gap-2">
+          {hasPartner === false && (
+            <button
+              onClick={() => router.push('/invite')}
+              className="relative p-2 rounded-full hover:bg-white/50"
+            >
+              <UserPlus className="h-6 w-6 text-[var(--secondary)]" />
+              <span className="absolute -top-1 -right-1 bg-[var(--secondary)] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                !
+              </span>
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => router.push('/matches')}
+            className="relative p-2 rounded-full hover:bg-white/50"
+          >
+            <Heart className="h-6 w-6 text-[var(--primary)] fill-[var(--primary)]" />
+            {matchCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[var(--primary)] text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                {matchCount}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Main swipe area */}
@@ -173,6 +264,11 @@ export default function SwipePage() {
                 />
               )}
             </AnimatePresence>
+            {loadingMore && (
+              <div className="absolute bottom-0 left-0 right-0 text-center text-sm text-[var(--foreground-muted)]">
+                Loading more names...
+              </div>
+            )}
           </div>
         )}
 
